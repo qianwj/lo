@@ -4,6 +4,8 @@ import (
 	"math/rand"
 
 	"golang.org/x/exp/constraints"
+
+	"github.com/samber/mo"
 )
 
 // Filter iterates over elements of collection, returning an array of all elements predicate returns truthy for.
@@ -30,6 +32,18 @@ func Map[T any, R any](collection []T, iteratee func(T, int) R) []R {
 	return result
 }
 
+func ErrMap[T, R any](collection []T, iteratee func(T, int) mo.Result[R]) mo.Result[[]R] {
+	result := make([]R, len(collection))
+	for i, item := range collection {
+		r := iteratee(item, i)
+		if r.IsError() {
+			return mo.Err[[]R](r.Error())
+		}
+		result[i] = r.MustGet()
+	}
+	return mo.Ok(result)
+}
+
 // FilterMap returns a slice which obtained after both filtering and mapping using the given callback function.
 // The callback function should return two values:
 //   - the result of the mapping operation and
@@ -46,6 +60,21 @@ func FilterMap[T any, R any](collection []T, callback func(T, int) (R, bool)) []
 	return result
 }
 
+func ErrFilterMap[T, R any](collection []T, callback func(T, int) mo.Result[mo.Option[R]]) mo.Result[[]R] {
+	result := make([]R, 0)
+	for i, item := range collection {
+		r := callback(item, i)
+		if r.IsError() {
+			return mo.Err[[]R](r.Error())
+		}
+		opt := r.MustGet()
+		if opt.IsPresent() {
+			result = append(result, opt.MustGet())
+		}
+	}
+	return mo.Ok(result)
+}
+
 // FlatMap manipulates a slice and transforms and flattens it to a slice of another type.
 func FlatMap[T any, R any](collection []T, iteratee func(T, int) []R) []R {
 	result := []R{}
@@ -55,6 +84,18 @@ func FlatMap[T any, R any](collection []T, iteratee func(T, int) []R) []R {
 	}
 
 	return result
+}
+
+func ErrFlatMap[T, R any](collection []T, iteratee func(T, int) mo.Result[[]R]) mo.Result[[]R] {
+	result := make([]R, 0)
+	for i, item := range collection {
+		r := iteratee(item, i)
+		if r.IsError() {
+			return mo.Err[[]R](r.Error())
+		}
+		result = append(result, r.MustGet()...)
+	}
+	return mo.Ok(result)
 }
 
 // Reduce reduces collection to a value which is the accumulated result of running each element in collection
